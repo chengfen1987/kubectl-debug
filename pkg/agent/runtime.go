@@ -154,6 +154,7 @@ func (c *DockerContainerRuntime) CreateContainer(cfg RunConfig) (*container.Cont
 		IpcMode:     container.IpcMode(c.containerMode(cfg.idOfContainerToDebug)),
 		PidMode:     container.PidMode(c.containerMode(cfg.idOfContainerToDebug)),
 		CapAdd:      strslice.StrSlice([]string{"SYS_PTRACE", "SYS_ADMIN"}),
+		VolumesFrom: []string{cfg.idOfContainerToDebug,},
 	}
 	ctx, cancel := cfg.getContextWithTimeout()
 	defer cancel()

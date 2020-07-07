@@ -108,6 +108,11 @@ func (s *Server) ServeDebug(w http.ResponseWriter, req *http.Request) {
 	}
 	iverbosity, _ := strconv.Atoi(sverbosity)
 
+	imagePolicy := req.FormValue("imagePullPolicy")
+	if imagePolicy == "" {
+		imagePolicy = "IfNotPresent"
+	}
+
 	context, cancel := context.WithCancel(req.Context())
 	defer cancel()
 
@@ -135,7 +140,7 @@ func (s *Server) ServeDebug(w http.ResponseWriter, req *http.Request) {
 	kubeletremote.ServeAttach(
 		w,
 		req,
-		runtime.GetAttacher(image, authStr, LxcfsEnabled, registrySkipTLS,
+		runtime.GetAttacher(image, imagePolicy, authStr, LxcfsEnabled, registrySkipTLS,
 			commandSlice, context, cancel),
 		"",
 		"",

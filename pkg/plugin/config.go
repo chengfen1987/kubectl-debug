@@ -13,6 +13,7 @@ type RegistryAuthConfig struct {
 type Config struct {
 	AgentPort               int      `yaml:"agentPort,omitempty"`
 	Image                   string   `yaml:"image,omitempty"`
+	ImagePullPolicy         string   `yaml:"imagePullPolicy,omitempty"`
 	RegistrySecretName      string   `yaml:"registrySecretName,omitempty"`
 	RegistrySecretNamespace string   `yaml:"registrySecretNamespace,omitempty"`
 	RegistrySkipTLSVerify   bool     `yaml:"registrySkipTLSVerify,omitempty"`

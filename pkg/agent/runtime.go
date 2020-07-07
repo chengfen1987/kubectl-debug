@@ -31,6 +31,7 @@ import (
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/containerd/typeurl"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/strslice"
 	dockerclient "github.com/docker/docker/client"
@@ -63,6 +64,7 @@ type RunConfig struct {
 	timeout              time.Duration
 	idOfContainerToDebug string
 	image                string
+	imagePullPolicy      string
 	command              []string
 	stdin                io.Reader
 	stdout               io.WriteCloser
@@ -79,7 +81,7 @@ func (c *RunConfig) getContextWithTimeout() (context.Context, context.CancelFunc
 }
 
 type ContainerRuntime interface {
-	PullImage(ctx context.Context, image string,
+	PullImage(ctx context.Context, image string, imagePullPolicy string,
 		skipTLS bool, authStr string,
 		stdout io.WriteCloser) error
 	ContainerInfo(ctx context.Context, cfg RunConfig) (ContainerInfo, error)
@@ -93,8 +95,24 @@ type DockerContainerRuntime struct {
 var DockerContainerRuntimeImplementsContainerRuntime ContainerRuntime = (*DockerContainerRuntime)(nil)
 
 func (c *DockerContainerRuntime) PullImage(ctx context.Context,
-	image string, skipTLS bool, authStr string,
+	image string, imagePullPolicy string, skipTLS bool, authStr string,
 	stdout io.WriteCloser) error {
+	
+	filters := filters.NewArgs()
+	filters.Add("reference", image)
+	options := types.ImageListOptions{
+		All:     false,
+		Filters: filters,
+	}
+	imgs, err := c.client.ImageList(ctx, options)
+	if err != nil {
+		return err
+	}
+
+	if len(imgs) != 0 && imagePullPolicy == "IfNotPresent" {
+		return nil
+	}
+
 	authBytes := base64.URLEncoding.EncodeToString([]byte(authStr))
 	out, err := c.client.ImagePull(ctx, image, types.ImagePullOptions{RegistryAuth: string(authBytes)})
 	if err != nil {
@@ -501,7 +519,7 @@ outer:
 }
 
 func (c *ContainerdContainerRuntime) PullImage(
-	ctx context.Context, image string, skipTLS bool,
+	ctx context.Context, image string, imagePullPolicy string, skipTLS bool,
 	authStr string,
 	stdout io.WriteCloser) error {
 
@@ -810,6 +828,7 @@ func (c *ContainerdContainerRuntime) resizeContainerTTY(ctx context.Context,
 type DebugAttacher struct {
 	containerRuntime     ContainerRuntime
 	image                string
+	imagePullPolicy      string
 	authStr              string
 	registrySkipTLS      bool
 	lxcfsEnabled         bool
@@ -843,6 +862,7 @@ func (a *DebugAttacher) AttachContainer(name string, uid kubetype.UID, container
 		timeout:              a.timeout,
 		idOfContainerToDebug: a.idOfContainerToDebug,
 		image:                a.image,
+		imagePullPolicy:      a.imagePullPolicy,
 		command:              a.command,
 		stdin:                in,
 		stdout:               out,
@@ -909,7 +929,7 @@ func (m *DebugAttacher) DebugContainer(cfg RunConfig) error {
 	if cfg.verbosity < 1 {
 		ioForPull = nil
 	}
-	err := m.containerRuntime.PullImage(m.context, m.image,
+	err := m.containerRuntime.PullImage(m.context, m.image, m.imagePullPolicy,
 		m.registrySkipTLS, m.authStr, ioForPull)
 	if err != nil {
 		return err
@@ -1028,7 +1048,7 @@ func NewRuntimeManager(srvCfg Config, containerUri string, verbosity int,
 }
 
 // GetAttacher returns an implementation of Attacher
-func (m *RuntimeManager) GetAttacher(image, authStr string,
+func (m *RuntimeManager) GetAttacher(image, imagePullPolicy, authStr string,
 	lxcfsEnabled, registrySkipTLS bool,
 	command []string, context context.Context,
 	cancel context.CancelFunc) kubeletremote.Attacher {
@@ -1045,6 +1065,7 @@ func (m *RuntimeManager) GetAttacher(image, authStr string,
 	return &DebugAttacher{
 		containerRuntime:     containerRuntime,
 		image:                image,
+		imagePullPolicy:      imagePullPolicy,
 		authStr:              authStr,
 		lxcfsEnabled:         lxcfsEnabled,
 		registrySkipTLS:      registrySkipTLS,

@@ -66,6 +66,7 @@ Run a container in a running pod, this container will join the namespaces of an 
 You may set default configuration such as image and command in the config file, which locates in "~/.kube/debug-config" by default.
 `
 	defaultImage          = "docker.io/nicolaka/netshoot:latest"
+	defaultImagePullPolicy = "IfNotPresent"
 	defaultAgentPort      = 10027
 	defaultConfigLocation = "/.kube/debug-config"
 	defaultDaemonSetName  = "debug-agent"
@@ -100,6 +101,7 @@ type DebugOptions struct {
 
 	// Debug options
 	Image                   string
+	ImagePullPolicy         string
 	RegistrySecretName      string
 	RegistrySecretNamespace string
 	RegistrySkipTLSVerify   bool
@@ -188,6 +190,8 @@ func NewDebugCmd(streams genericclioptions.IOStreams) *cobra.Command {
 	//	fmt.Sprintf("Retain container after debug session closed, default to %s", defaultRetain))
 	cmd.Flags().StringVar(&opts.Image, "image", "",
 		fmt.Sprintf("Container Image to run the debug container, default to %s", defaultImage))
+	cmd.Flags().StringVar(&opts.ImagePullPolicy, "imagePullPolicy", "",
+		fmt.Sprintf("Container Image Pull Policy, default to %s", defaultImagePullPolicy))
 	cmd.Flags().StringVar(&opts.RegistrySecretName, "registry-secret-name", "",
 		"private registry secret name, default is kubectl-debug-registry-secret")
 	cmd.Flags().StringVar(&opts.RegistrySecretNamespace, "registry-secret-namespace", "",
@@ -290,6 +294,13 @@ func (o *DebugOptions) Complete(cmd *cobra.Command, args []string, argsLenAtDash
 			o.Image = config.Image
 		} else {
 			o.Image = defaultImage
+		}
+	}
+	if len(o.ImagePullPolicy) < 1 {
+		if len(config.ImagePullPolicy) > 0 {
+			o.ImagePullPolicy = config.ImagePullPolicy
+		} else {
+			o.ImagePullPolicy = defaultImagePullPolicy
 		}
 	}
 	if len(o.RegistrySecretName) < 1 {
@@ -576,6 +587,7 @@ func (o *DebugOptions) Run() error {
 		uri.Path = fmt.Sprintf("/api/v1/debug")
 		params := url.Values{}
 		params.Add("image", o.Image)
+		params.Add("imagePullPolicy", o.ImagePullPolicy)
 		params.Add("container", containerID)
 		params.Add("verbosity", fmt.Sprintf("%v", o.Verbosity))
 		hstNm, _ := os.Hostname()
